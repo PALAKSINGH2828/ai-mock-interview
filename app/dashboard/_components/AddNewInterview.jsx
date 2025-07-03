@@ -46,7 +46,7 @@ function AddNewInterview() {
       process.env.NEXT_PUBLIC_INTERVIEW_QUESTION_COUNT +
       " Interview question with Answered in Json Format, Give Question and Answered as field in JSON"
 
-    const result = await chatSession.sendMessage(InputPrompt)
+    const result = await chatSession.sendMessage(InputPrompt);
     const MockJsonResp = result.response
       .text()
       .replace("```json", "")
@@ -70,7 +70,7 @@ const res=await db.insert(MockInterview)
 
 }).returning({mockId:MockInterview.mockId})
 
-console.log("Inserted ID:",res)
+console.log("Inserted ID:",resp)
 if(resp)
 {
   setOpenDialog(false);
@@ -141,7 +141,7 @@ if(resp)
                       />
                     </div>
                   </div>
-                  <div className="flex gap-5 justify-end">
+                  <div className="flex gap-5 justify-end pt-4">
                     <Button
                       type="button"
                       variant="ghost"
