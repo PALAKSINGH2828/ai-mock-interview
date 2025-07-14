@@ -1,17 +1,24 @@
-"use client";
-
-import { Button } from '@/components/ui/button';
-import Image from 'next/image';
-import React, { useEffect, useState } from 'react';
-import Webcam from 'react-webcam';
+"use client"
+import { Button } from '@/components/ui/button'
+import Image from 'next/image'
+import React, { useEffect, useState } from 'react'
+import Webcam from 'react-webcam'
 import useSpeechToText from 'react-hook-speech-to-text';
-import { toast } from 'sonner';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Mic, StopCircle } from 'lucide-react'
 
-function RecordAnswerSection({ mockInterviewQuestion, activeQuestionIndex }) {
-  const [userAnswer, setUserAnswer] = useState('');
-  const [buttonDisabled, setButtonDisabled] = useState(false);
+import { toast } from 'sonner'
+import { chatSession } from '@/utils/GeminiAIModel'
+ import { UserAnswer } from '@/utils/schema'
+import { useUser } from '@clerk/nextjs'
+import moment from 'moment'
+import { db } from '@/utils/db'
 
+
+
+function RecordAnswerSection({mockInterviewQuestion,activeQuestionIndex,interviewData}) {
+  const [userAnswer,setUserAnswer]=useState('');
+  const {user}=useUser();
+  const [loading, setLoading] = useState(false);
   const {
     error,
     interimResult,
@@ -19,109 +26,118 @@ function RecordAnswerSection({ mockInterviewQuestion, activeQuestionIndex }) {
     results,
     startSpeechToText,
     stopSpeechToText,
+    setResults
   } = useSpeechToText({
-    continuous: true,
-    useLegacyResults: false,
+    continuous: true, 
+    useLegacyResults: false
   });
 
-  useEffect(() => {
-    const combinedTranscript = results.map((result) => result.transcript).join(' ');
-    setUserAnswer(combinedTranscript);
-  }, [results]);
 
-  const SaveUserAnswer = async () => {
-    if (isRecording) {
-      stopSpeechToText();
-      if (userAnswer?.length < 10) {
-        toast('Error: Your answer is too short. Please record again.');
-        return;
-      }
+  useEffect(()=>{
+   results.map((result)=>(
+        setUserAnswer(prevAns=>prevAns+result?.transcript)
+   ))
+  },[results])
 
-      const feedbackPrompt =
-        "Question: " + mockInterviewQuestion[activeQuestionIndex]?.Question +
-        ", User Answer: " + userAnswer +
-        ". Depending on the question and user answer, please give a rating for this answer (1 to 5) and feedback (areas of improvement if any) in JSON format with fields: rating and feedback. Respond ONLY with JSON.";
-
-      try {
-        const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-        const chat = model.startChat({
-          history: [],
-        });
-
-        const result = await chat.sendMessageStream(feedbackPrompt);
-        const text = await result.response.text();
-
-        const cleaned = text
-          .replace("```json", "")
-          .replace("```", "")
-          .trim();
-
-        try {
-          const parsed = JSON.parse(cleaned);
-          console.log("✅ Parsed feedback:", parsed);
-          console.log("⭐ Rating:", parsed.rating);
-          console.log("💬 Feedback:", parsed.feedback);
-          toast("✅ Feedback received! Check console for details.");
-        } catch (error) {
-          console.error("❌ Failed to parse feedback JSON:", error);
-          console.log("Raw text:", cleaned);
-          toast("⚠️ Gemini did not return valid JSON. Please try again.");
-        }
-      } catch (error) {
-        console.error("Error getting feedback:", error);
-
-        if (error.message.includes("quota")) {
-          toast("🚫 You hit your Gemini API quota. Please wait and try again.");
-          setButtonDisabled(true);
-
-          // Re-enable button after 30 seconds
-          setTimeout(() => {
-            setButtonDisabled(false);
-          }, 30000);
-        } else {
-          toast("❌ Failed to get feedback from Gemini");
-        }
-      }
-    } else {
-      startSpeechToText();
+  useEffect(()=>{
+    if(!isRecording&&userAnswer.length>10){
+      UpdateUserAnswer();
     }
-  };
 
-  return (
-    <div className='flex items-center justify-center flex-col'>
-      <div className='flex flex-col my-20 justify-center items-center bg-black rounded-lg p-5 relative'>
-        <Image 
-          src={'/webcam.png'} 
-          width={200} 
-          height={200} 
-          alt="Webcam icon" 
-          className='absolute' 
-        />
-        <Webcam
-          mirrored={true}
-          style={{
-            height: 300,
-            width: '100%',
-            zIndex: 10,
-          }}
-        />
-      </div>
-      <Button 
-        variant="outline" 
-        className="my-10"
-        onClick={SaveUserAnswer}
-        disabled={buttonDisabled}
-      >
-        {isRecording ? (
-          <h2 className='text-red-600 flex gap-2'>Stop Recording......</h2>
-        ) : (
-          buttonDisabled ? "Please wait..." : "Record Answer"
-        )}
-      </Button>
-      <Button onClick={() => console.log(userAnswer)}>Show User Answer</Button>
-    </div>
-  );
+   },[userAnswer])
+
+
+
+
+const StartStopRecording=async()=>{
+  if(isRecording)
+  {
+    
+    stopSpeechToText();
+
+  }
+  else{
+    startSpeechToText();
+    
+  } 
 }
 
-export default RecordAnswerSection;
+const UpdateUserAnswer=async()=>{
+  setLoading(true);
+  const feedbackPrompt="Question:"+mockInterviewQuestion[activeQuestionIndex]?.Question+
+    ", User Answer:"+userAnswer +",Depends on question and user answer for given interview question "+
+    " Please give us rating for answer and feedback as area of improvment if any "+
+    "in just 3 to 5 lines to improve it in JSON format with rating field and feedback field";
+
+    const result=await chatSession.sendMessage(feedbackPrompt);
+     
+    const mockJsonResp=(result.response.text()).replace('```json','').replace('```','');
+    console.log(mockJsonResp); 
+    const JsonFeedbackResp=JSON.parse(mockJsonResp); 
+
+
+     const resp=await db.insert(UserAnswer)
+     .values({
+      mockIdRef:interviewData?.mockId,
+      question:mockInterviewQuestion[activeQuestionIndex]?.Question,
+      correctAns:mockInterviewQuestion[activeQuestionIndex]?.Answer,
+      userAns:userAnswer,
+      feedback:JsonFeedbackResp?.feedback,
+      rating:JsonFeedbackResp?.rating,
+      userEmail:user?.primaryEmailAddress?.emailAddress,
+      createdAt:moment().format('DD-MM-YYYY')
+     })
+
+     if(resp){
+       toast('User Answer recorded successfully')
+       setUserAnswer('');
+       setResults([]);
+     }
+     setResults([]);
+     setLoading(false);
+
+}
+
+  return (
+    <div className='flex flex-center justify-center flex-col'>
+    <div className='flex flex-col my-20 justify-center items-center bg-black rounded-lg p-5'>
+        <Image src={'/webcam.png'} 
+        alt="A description of the image"
+        width={200}
+         height={200}
+        className='absolute'/>
+      <Webcam
+      mirrored={true}
+      style={{
+        height:300,
+        width:'100%',
+        zIndex:10,
+      }}
+      />
+    </div> 
+    <Button
+    disabled={loading}
+    className="bg-transparent hover:bg-gray-100 text-black my-10 "
+    onClick={StartStopRecording}
+    >
+    {isRecording ? 
+  <h2 className='text-red-600 animate-pulse flex gap-2 item-center'>
+    <StopCircle /> stop Recording
+  </h2>
+ : 
+  <h2 className='text-blue flex gap-2 items-center'>
+    <Mic /> Record Answer
+  </h2> 
+} 
+      
+      
+      </Button>
+
+     
+    
+    </div>
+  )
+}
+
+export default RecordAnswerSection
+ 
