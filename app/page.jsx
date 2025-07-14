@@ -4,10 +4,8 @@ import Image from "next/image";
 export default function Home() {
   return (
    <div>
-    <h2>subscribe</h2>
-    <Button>
-      subscribe
-    </Button>
+    <h1>WRITE</h1>
+    <Button>/dashboard (on above URL)</Button>
    </div>
   );
 }
