@@ -9,8 +9,7 @@ import React, { useEffect, useState } from 'react'
 import Webcam from 'react-webcam'
 
 function Interview({ params }) {
-  const { interviewId } = React.use(params)
-
+  const { interviewId } = React.use(params);
   const [interviewData, setInterviewData] = useState()
   const [webCamEnabled, setWebCamEnabled] = useState(false)
 
@@ -25,7 +24,7 @@ function Interview({ params }) {
     const result = await db
       .select()
       .from(MockInterview)
-      .where(eq(MockInterview.mockId, params.interviewId))
+      .where(eq(MockInterview.mockId, interviewId))
 
     setInterviewData(result[0])
   }
@@ -81,7 +80,7 @@ function Interview({ params }) {
       </div>
 
       <div className='flex justify-end items-end mt-10'>
-       <Link href={'/dashboard/interview/'+params.interviewId+'/start'}>
+       <Link href={'/dashboard/interview/'+interviewId+'/start'}>
        <Button>Start Interview</Button>
        </Link>
       </div>

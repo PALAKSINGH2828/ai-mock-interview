@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 function StartInterview({params}) {
-
+  const { interviewId } = React.use(params);
     const [interviewData, setInterviewData] = useState();
     const [mockInterviewQuestion, setMockInterviewQuestion] = useState();
     const [activeQuestionIndex,setactiveQuestionIndex]=useState(0);
@@ -23,10 +23,11 @@ function StartInterview({params}) {
    * used to get interview Details by MockId/Interview Id
    */
   const GetInterviewDetails = async () => {
+    
     const result = await db
       .select()
       .from(MockInterview)
-      .where(eq(MockInterview.mockId, params.interviewId))
+      .where(eq(MockInterview.mockId, interviewId))
 
     const jsonMockResp=JSON.parse(result[0].jsonMockResp)
     console.log(jsonMockResp)
